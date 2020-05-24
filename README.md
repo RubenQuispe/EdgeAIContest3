@@ -18,3 +18,7 @@ Please download data from the competition into the ```data/``` folder:
 cd data/
 signate download --competition-id=256
 ```
+
+## Reference for Object Detection
+### Keras implementation of RetinaNet object detection.
+- [fizyr/keras-retinanet](https://github.com/fizyr/keras-retinanet)
