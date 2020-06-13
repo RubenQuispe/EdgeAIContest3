@@ -31,7 +31,7 @@ prediction = tracker.assign_ids(prediction, image)
 ## Test
 
 ```bash
-python3 object_tracker.py --input /path/to/annotation/directory --output /path/to/output.json
+python3 object_tracker.py --input_pred /path/to/annotation/directory --input_video /path/to/video/directory --output /path/to/output.json
 
 ...
 "train_00.json" Frame 1: #Car=1, #Pedestrian=15, Time=0.00231242(0.00231242@max), Cost=0.0
