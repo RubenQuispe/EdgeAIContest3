@@ -4,6 +4,7 @@ import numpy as np
 import copy
 import json
 import time
+import shutil
 from glob import glob
 from argparse import ArgumentParser
 from statistics import mean
@@ -24,10 +25,10 @@ class Tracker:
         self.cost_weight = {'Car': [0.5, 1.21], 'Pedestrian': [0.2, 1.16]}
         self.sim_weight = {'Car': 1.47, 'Pedestrian': 1.75}
         self.occ_weight = {'Car': 0.84, 'Pedestrian': 1.46}
+        self.last_id = -1
         self.total_cost = 0
 
 
-    # @profile
     def calculate_cost(self, box1, box2, hist1, hist2, cls='Car'):
         w1, h1 = box1[2]-box1[0]+1, box1[3]-box1[1]+1
         w2, h2 = box2[2]-box2[0]+1, box2[3]-box2[1]+1
@@ -42,7 +43,6 @@ class Tracker:
         return cost
 
 
-    # @profile
     def match(self, preds1, preds2, cls='Car'):
         n1 = len(preds1)
         n2 = len(preds2)
@@ -73,6 +73,7 @@ class Tracker:
         best_box_map = []
         min_cost = 1e16
 
+        # find at least one candidate to avoid no matching
         found1 = 0
         def rec_match_find1(rem_match, idx=0, box_map=[], curr_cost=0):
             nonlocal found1
@@ -95,7 +96,6 @@ class Tracker:
         count = 0
         start_time = time.time()
         time_over = False
-        # @profile
         def rec_match(rem_match, idx=0, box_map=[], curr_cost=0):
             nonlocal count
             nonlocal time_over
@@ -132,9 +132,6 @@ class Tracker:
                 rec_match(n_match, curr_cost=n_occ*self.occ_weight[cls]+n_frame_in)
 
         if n1>0 or n2>0:
-            if min_cost==1e16:
-                print(n1, n2)
-                exit()
             self.total_cost += min_cost
 
         return best_box_map
@@ -190,15 +187,10 @@ class Tracker:
             box_map = self.match(adjusted_preds, boxes, cls)
             prev_ids = list(map(lambda p: p['id'], adjusted_preds))
             next_ids = [prev_ids[box_map.index(i)] if i in box_map else -1 for i in range(len(boxes))]
-            next_id = 0
             for i in range(len(next_ids)):
                 if(next_ids[i]==-1):
-                    while True:
-                        if next_id not in next_ids:
-                            next_ids[i] = next_id
-                            next_id += 1
-                            break
-                        next_id += 1
+                    next_ids[i] = self.last_id + 1
+                    self.last_id += 1
             for i in range(len(boxes)):
                 if next_ids[i] in prev_ids:
                     prev_box2d = adjusted_preds[prev_ids.index(next_ids[i])]['box2d']
@@ -240,6 +232,12 @@ if __name__ == '__main__':
     video_total = {'Car': 0, 'Pedestrian': 0}
     video_error = {'Car': 0, 'Pedestrian': 0}
 
+    colors = [
+        (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255), (255, 0, 255), (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0),
+        (0, 128, 128), (128, 0, 128), (255, 128, 0), (255, 0, 128), (255, 128, 128), (128, 255, 0), (0, 255, 128), (128, 255, 128), (128, 0, 255), (0, 128, 255),
+        (128, 128, 255), (128, 128, 128), (0, 0, 0), (255, 255, 255),
+    ]
+
     for nv, pred in enumerate(sorted(glob(os.path.join(args.input_pred_path, '*')))):
         max_time = 0
         # if nv<24:
@@ -255,6 +253,9 @@ if __name__ == '__main__':
         total = {'Car': 0, 'Pedestrian': 0}
         sw = {'Car': 0, 'Pedestrian': 0}
         tp = {'Car': 0, 'Pedestrian': 0}
+        if os.path.exists(os.path.join('debug', video_name.split('.')[0])):
+            shutil.rmtree(os.path.join('debug', video_name.split('.')[0]))
+        os.mkdir(os.path.join('debug', video_name.split('.')[0]))
         for frame in range(len(ground_truths)):
             if frame%100==0:
                 print(f'"{video_name}" Frame {frame+1}: ', end='')
@@ -279,7 +280,11 @@ if __name__ == '__main__':
                                 m_id = p_id
                                 break
                         prev_id_map[cls][gt_id] = m_id
+                prev_image = image
             else:
+                debug_image1 = prev_image.copy()
+                debug_image2 = image.copy()
+                debug_idx = 0
                 id_map = {'Car': {}, 'Pedestrian': {}}
                 for cls, gt in ground_truth.items():
                     bm = 0
@@ -308,11 +313,22 @@ if __name__ == '__main__':
                             prev_m_id = prev_id_map[cls][gt_id]
                             if gt_id in id_map[cls].keys():
                                 if prev_m_id!=id_map[cls][gt_id]:
+                                    debug_bb1 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-2][cls]))
+                                    debug_bb2 = list(filter(lambda p: p['id']==prev_m_id, tracker.predictions[-1][cls]))
+                                    if len(debug_bb1)>0 and len(debug_bb2)>0:
+                                        debug_bb1 = debug_bb1[0]['box2d']
+                                        debug_bb2 = debug_bb2[0]['box2d']
+                                        debug_image1 = cv2.rectangle(debug_image1, (debug_bb1[0], debug_bb1[1]), (debug_bb1[2], debug_bb1[3]), colors[debug_idx], 3)
+                                        debug_image2 = cv2.rectangle(debug_image2, (debug_bb2[0], debug_bb2[1]), (debug_bb2[2], debug_bb2[3]), colors[debug_idx], 3)
+                                        debug_idx += 1
                                     sw[cls] += 1
                                 else:
                                     tp[cls] += 1
                 for k, v in id_map.items():
                     prev_id_map[k] = v
+                debug_image = np.concatenate([debug_image1, debug_image2], axis=1)
+                cv2.imwrite(os.path.join('debug', video_name.split('.')[0], f'{frame}.png'), debug_image)
+                prev_image = image
 
             t2 = time.time()
             max_time = max(max_time, t2-t1)
