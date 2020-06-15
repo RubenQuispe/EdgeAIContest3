@@ -12,7 +12,8 @@ from statistics import mean
 
 class Tracker:
     def __init__(self, image_size, max_patterns=10000000, max_time=0.1):
-        self.predictions = [{'Car': [], 'Pedestrian': []}]; # {'id': id, 'box2d': [x1, y1, x2, y2], 'mv': [vx, vy], 'scale': [sx, sy], 'occlusion': number_of_occlusions, 'image': image}
+        self.init_predictions = {'Car': [], 'Pedestrian': []};
+        self.predictions = [self.init_predictions]; # {'id': id, 'box2d': [x1, y1, x2, y2], 'mv': [vx, vy], 'scale': [sx, sy], 'occlusion': number_of_occlusions, 'image': image}
         self.image_size = image_size
         self.max_occ_frames = 20
         self.frame_out_thresh = 0.2
@@ -22,9 +23,9 @@ class Tracker:
         self.max_frame_in = {'Car': 4, 'Pedestrian': 5}
         self.cost_thresh1 = {'Car': 0.35, 'Pedestrian': 0.83}
         self.cost_thresh2 = {'Car': 0.71, 'Pedestrian': 1.44}
-        self.cost_weight = {'Car': [0.5, 1.21], 'Pedestrian': [0.2, 1.16]}
-        self.sim_weight = {'Car': 1.47, 'Pedestrian': 1.75}
-        self.occ_weight = {'Car': 0.84, 'Pedestrian': 1.46}
+        self.cost_weight = {'Car': [0.5, 1.21], 'Pedestrian': [0.2, 1.09]}
+        self.sim_weight = {'Car': 1.47, 'Pedestrian': 1.76}
+        self.occ_weight = {'Car': 0.84, 'Pedestrian': 1.35}
         self.last_id = -1
         self.total_cost = 0
 
@@ -141,7 +142,12 @@ class Tracker:
     def assign_ids(self, pred, image): # {'Car': [{'box2d': [x1, y1, x2, y2]}], 'Pedestrian': [{'box2d': [x1, y1, x2, y2]}]}
         pred = copy.deepcopy(pred)
         for cls, boxes in pred.items():
-            last_preds = self.predictions[-1][cls]
+            if cls not in pred:
+                pred[cls] = self.init_predictions[cls]
+            if cls not in self.predictions[-1]:
+                last_preds = self.init_predictions[cls]
+            else:
+                last_preds = self.predictions[-1][cls]
             adjusted_preds = []
             n_frame_out = 0
             for box in boxes:
@@ -237,6 +243,9 @@ if __name__ == '__main__':
         (0, 128, 128), (128, 0, 128), (255, 128, 0), (255, 0, 128), (255, 128, 128), (128, 255, 0), (0, 255, 128), (128, 255, 128), (128, 0, 255), (0, 128, 255),
         (128, 128, 255), (128, 128, 128), (0, 0, 0), (255, 255, 255),
     ]
+
+    if not os.path.exists('debug'):
+        os.mkdir('debug')
 
     for nv, pred in enumerate(sorted(glob(os.path.join(args.input_pred_path, '*')))):
         max_time = 0
