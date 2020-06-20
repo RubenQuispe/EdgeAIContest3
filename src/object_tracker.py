@@ -377,6 +377,7 @@ class Tracker:
                         a = [mv[0]-mv2[0], mv[1]-mv2[1]]
                         if abs(mv[0])>abs(a[0])*2 and abs(mv[1])>abs(a[1])*2:
                             mv = [mv[0]+a[0], mv[1]+a[1]]
+                        mv = [(mv2[0]+mv[0])/2, (mv2[1]+mv[1])/2]
 
                 # estimate scaling speed of each object and predict next size
                 scale = p['scale']
@@ -479,8 +480,6 @@ if __name__ == '__main__':
 
     for nv, pred in enumerate(sorted(glob(os.path.join(args.input_pred_path, '*')))):
         max_time = 0
-        if nv<16: continue
-        if nv==17: break
         with open(pred) as f:
             ground_truths = json.load(f)
         ground_truths = ground_truths['sequence']
